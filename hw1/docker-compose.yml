@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: courier_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  web:
+    build: .
+    depends_on:
+      - db
+      - processor
+    environment:
+      DATABASE_URL: mysql+mysqlconnector://user:password@db/courier_db
+      PROCESS_URL: http://processor:8080
+    ports:
+      - "8000:8000"
+    links:
+      - db
+      - processor
+
+  processor:
+    image: igorsakhankov/harbour-cloudcomputing
+    ports:
+      - "8181:8080"
+
+volumes:
+  mysql_data:
