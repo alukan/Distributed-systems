@@ -7,6 +7,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import requests
 import os
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import pybreaker
 
 # Create the FastAPI app
 app = FastAPI()
@@ -67,6 +69,25 @@ def get_db():
         db.close()
 
 
+breaker = pybreaker.CircuitBreaker(fail_max=5, reset_timeout=60)
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    retry=retry_if_exception_type(requests.RequestException)
+)
+def call_process_service(payload):
+    print('Calling process service')
+    response = requests.post(
+        f'{PROCESS_URL}/v1/wallet/transaction',
+        json=payload,
+        timeout=10
+    )
+    response.raise_for_status()
+    return response
+
+
 @app.post("/collect_cash")
 def collect_cash(transaction_request: TransactionRequest, db: Session = Depends(get_db)):
     try:
@@ -77,19 +98,27 @@ def collect_cash(transaction_request: TransactionRequest, db: Session = Depends(
         )
         db.add(transaction)
 
+        payload = {
+            'amount': transaction_request.amount,
+            'currency': 'USD',
+            'description': f'Cash collection from courier {transaction_request.courier_id}',
+            'userId': str(transaction_request.courier_id)
+        }
+
+
         try:
-            response = requests.post(f'{PROCESS_URL}/v1/wallet/transaction', json={
-                'amount': transaction_request.amount,
-                'currency': 'USD',
-                'description': f'Cash collection from courier {transaction_request.courier_id}',
-                'userId': str(transaction_request.courier_id)
-            })
+            response = breaker.call(call_process_service, payload)
             if response.status_code == 200:
                 transaction.status = 'processed'
                 db.commit()
             else:
                 transaction.status = 'failed'
                 db.rollback()
+                
+        except requests.RequestException as e:
+            transaction.status = 'timeout error'
+            print(e)
+            db.rollback()
         except Exception as e:
             transaction.status = 'error'
             print(e)
