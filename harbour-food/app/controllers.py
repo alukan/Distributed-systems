@@ -10,7 +10,7 @@ class TransactionRequest(BaseModel):
     courier_id: int
     amount: float
 
-def collect_cash(transaction_request: TransactionRequest, db: Session = Depends(get_db)):
+def collect_cash(transaction_request: TransactionRequest, db: Session):
     try:
         transaction = Transaction(
             courier_id=transaction_request.courier_id,

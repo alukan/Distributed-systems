@@ -1,0 +1,67 @@
+name: Build, Deploy, and Test
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    env:
+      REPO_DIR: 'Distributed-systems'
+      DOCKER_IMAGE: 'ttl.sh/alukan-harbour.food:latest'
+      CONTAINER_NAME: 'alukan-harbour.food:latest'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Docker image
+        run: docker build -t ${{ env.DOCKER_IMAGE }} .
+
+      - name: Start Docker container for testing
+        run: docker run -d --name ${{ env.CONTAINER_NAME }} ${{ env.DOCKER_IMAGE }} 
+
+      - name: Run tests in Docker container
+        run: docker exec ${{ env.CONTAINER_NAME }} 
+
+      - name: Stop and remove test container
+        run: |
+          docker stop ${{ env.CONTAINER_NAME }}
+          docker rm ${{ env.CONTAINER_NAME }}
+
+      - name: Push Docker image
+        run: docker push ${{ env.DOCKER_IMAGE }}
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    env:
+      CONTAINER_NAME: 'alukan-harbour.food'
+      CONTAINER_PORT: '8000'
+      DOCKER_IMAGE: 'ttl.sh/alukan-harbour.food:latest'
+
+    steps:
+      - name: Install SSH client
+        run: sudo apt-get install -y openssh-client
+
+      - name: Deploy to Staging VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ec2-35-180-30-207.eu-west-3.compute.amazonaws.com
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo systemctl start docker
+            sudo docker ps -a
+            sudo docker stop ${{ env.CONTAINER_NAME }} || true
+            sudo docker rm ${{ env.CONTAINER_NAME }} || true
+            sudo docker pull ${{ env.DOCKER_IMAGE }}
+            sudo docker run -d --name ${{ env.CONTAINER_NAME }} -p ${{ env.CONTAINER_PORT }}:${{ env.CONTAINER_PORT }} ${{ env.DOCKER_IMAGE }} node index.js
+

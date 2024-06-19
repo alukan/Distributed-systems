@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  mysql_db_1:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: example1
+      MYSQL_DATABASE: courier_db_1
+      MYSQL_USER: user1
+      MYSQL_PASSWORD: password1
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data_1:/var/lib/mysql
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--silent"]
+      interval: 10s
+      retries: 5
+
+  mysql_db_2:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: example2
+      MYSQL_DATABASE: courier_db_2
+      MYSQL_USER: user2
+      MYSQL_PASSWORD: password2
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data_2:/var/lib/mysql
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--silent"]
+      interval: 10s
+      retries: 5
+
+  app1:
+    build: .
+    environment:
+      DATABASE_URL_1: mysql+mysqlconnector://user1:password1@mysql_db_1:3306/courier_db_1
+      DATABASE_URL_2: mysql+mysqlconnector://user2:password2@mysql_db_2:3306/courier_db_2
+      PROCESS_URL: http://processor:8080
+      SERVICE_NAME: app1
+      SERVICE_PORT: 8001
+    ports:
+      - "8001:8000"
+    depends_on:
+      mysql_db_1:
+        condition: service_healthy
+      mysql_db_2:
+        condition: service_healthy
+      processor:
+        condition: service_started
+    networks:
+      - mynetwork
+
+  app2:
+    build: .
+    environment:
+      DATABASE_URL_1: mysql+mysqlconnector://user1:password1@mysql_db_1:3306/courier_db_1
+      DATABASE_URL_2: mysql+mysqlconnector://user2:password2@mysql_db_2:3306/courier_db_2
+      PROCESS_URL: http://processor:8080
+      SERVICE_NAME: app2
+      SERVICE_PORT: 8002
+    ports:
+      - "8002:8000"
+    depends_on:
+      mysql_db_1:
+        condition: service_healthy
+      mysql_db_2:
+        condition: service_healthy
+      processor:
+        condition: service_started
+    networks:
+      - mynetwork
+
+  app3:
+    build: .
+    environment:
+      DATABASE_URL_1: mysql+mysqlconnector://user1:password1@mysql_db_1:3306/courier_db_1
+      DATABASE_URL_2: mysql+mysqlconnector://user2:password2@mysql_db_2:3306/courier_db_2
+      PROCESS_URL: http://processor:8080
+      SERVICE_NAME: app3
+      SERVICE_PORT: 8003
+    ports:
+      - "8003:8000"
+    depends_on:
+      mysql_db_1:
+        condition: service_healthy
+      mysql_db_2:
+        condition: service_healthy
+      processor:
+        condition: service_started
+    networks:
+      - mynetwork
+
+  processor:
+    image: igorsakhankov/harbour-cloudcomputing
+    ports:
+      - "8181:8080"
+    networks:
+      - mynetwork
+
+  load_balancer:
+    build: ./load_balancer
+    ports:
+      - "8000:8000"
+    depends_on:
+      - app1
+      - app2
+      - app3
+    networks:
+      - mynetwork
+
+volumes:
+  mysql_data_1:
+  mysql_data_2:
+
+networks:
+  mynetwork:
