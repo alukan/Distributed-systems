@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
-from app.db import Base, engine_1, engine_2, get_db
-from app.services import register_service
-from app.controllers import collect_cash, get_transactions, health, index, TransactionRequest
+from db import Base, engine_1, engine_2, get_db
+from services import register_service
+from controllers import collect_cash, get_transactions, health, index, TransactionRequest
 from contextlib import AsyncExitStack
 
 app = FastAPI()
@@ -33,8 +33,11 @@ async def health_route():
 async def index_route():
     return index()
 
-Base.metadata.create_all(bind=engine_1)
-Base.metadata.create_all(bind=engine_2)
+try:
+    Base.metadata.create_all(bind=engine_1)
+    Base.metadata.create_all(bind=engine_2)
+except:
+    pass
 
 @app.on_event("startup")
 async def startup_event():

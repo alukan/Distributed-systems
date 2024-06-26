@@ -1,9 +1,9 @@
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from app.db import get_db
-from app.models import Transaction
-from app.services import call_process_service, breaker
+from db import get_db
+from models import Transaction, Outbox
+from services import call_process_service, breaker
 import httpx 
 
 class TransactionRequest(BaseModel):
@@ -18,6 +18,7 @@ def collect_cash(transaction_request: TransactionRequest, db: Session):
             status="pending"
         )
         db.add(transaction)
+        db.flush()
 
         payload = {
             'amount': transaction_request.amount,
@@ -30,6 +31,17 @@ def collect_cash(transaction_request: TransactionRequest, db: Session):
             response = breaker.call(call_process_service, payload)
             if response.status_code == 200:
                 transaction.status = 'processed'
+
+                # Write to outbox table
+                outbox_entry = Outbox(
+                    aggregate_id=transaction.id,
+                    aggregate_type='transaction',
+                    payload={
+                        'message': f'Transaction {transaction.id} processed for courier {transaction.courier_id}',
+                        'courier_id': transaction.courier_id
+                    }
+                )
+                db.add(outbox_entry)
                 db.commit()
             else:
                 transaction.status = 'failed'
