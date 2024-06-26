@@ -38,7 +38,7 @@ services:
       retries: 5
 
   app1:
-    build: .
+    build: ./app
     environment:
       DATABASE_URL_1: mysql+mysqlconnector://user1:password1@mysql_db_1:3306/courier_db_1
       DATABASE_URL_2: mysql+mysqlconnector://user2:password2@mysql_db_2:3306/courier_db_2
@@ -58,7 +58,7 @@ services:
       - mynetwork
 
   app2:
-    build: .
+    build: ./app
     environment:
       DATABASE_URL_1: mysql+mysqlconnector://user1:password1@mysql_db_1:3306/courier_db_1
       DATABASE_URL_2: mysql+mysqlconnector://user2:password2@mysql_db_2:3306/courier_db_2
@@ -78,7 +78,7 @@ services:
       - mynetwork
 
   app3:
-    build: .
+    build: ./app
     environment:
       DATABASE_URL_1: mysql+mysqlconnector://user1:password1@mysql_db_1:3306/courier_db_1
       DATABASE_URL_2: mysql+mysqlconnector://user2:password2@mysql_db_2:3306/courier_db_2
@@ -112,6 +112,16 @@ services:
       - app1
       - app2
       - app3
+    networks:
+      - mynetwork
+
+  outbox_processor:
+    build: ./outbox_processor
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+    depends_on:
+      - mysql_db_1
     networks:
       - mynetwork
 
